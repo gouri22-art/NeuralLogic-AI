@@ -29,7 +29,10 @@ Follow these steps to get the project running on your local machine.
 git clone [https://github.com/YOUR_USERNAME/NeuralLogic-AI.git](https://github.com/YOUR_USERNAME/NeuralLogic-AI.git)
 cd NeuralLogic-AI
 
+# 🛠️ Installation & Local Setup
+
 ### 3. Install Dependencies
+Install the required Python libraries using the command below:
 ```bash
 pip install streamlit groq python-dotenv
 
