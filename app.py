@@ -20,18 +20,34 @@ user_query = st.text_area("Describe your machine logic:", placeholder="Type inst
 
 if st.button("Generate PLC Code"):
     if user_query:
-        with st.spinner("AI is engineering your logic..."):
-            # 1. Get code from Brain
-            raw_code = brain.generate_plc_code(user_query)
+        with st.spinner("Engineering..."):
+            raw_output = brain.generate_plc_code(user_query)
             
-            # 2. Run through Validator
-            is_safe, message = validator.validate_st_code(raw_code)
+            # 1. Extract and Fix
+            clean_code = validator.extract_code_only(raw_output)
+            fixed_code = validator.fix_st_code(clean_code)
             
-            if is_safe:
-                st.success("✅ Code Generated & Safety Verified!")
-                st.code(raw_code, language='pascal') # 'pascal' highlights ST code well
+            # 2. Validate
+            errors = validator.validate_st_code(fixed_code)
+            
+            # 3. UI logic
+            if not errors:
+                st.success("✅ Code Generated!")
             else:
-                st.error(f"❌ Safety Violation: {message}")
-                st.code(raw_code, language='pascal')
+                with st.expander("⚠️ View Syntax Warnings"):
+                    for err in errors:
+                        st.write(err)
+
+            # --- DISPLAY THE CODE ---
+            st.code(fixed_code, language='iecst')
+
+            # --- PLACE DOWNLOAD BUTTON HERE ---
+            # It must be inside this 'if' block so 'fixed_code' is defined!
+            st.download_button(
+                label="Download .ST File",
+                data=fixed_code,
+                file_name="plc_logic.st",
+                mime="text/plain"
+            )
     else:
         st.error("Please enter a description first.")

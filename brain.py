@@ -28,13 +28,13 @@ def generate_plc_code(user_instruction):
     # This 'System Prompt' is the "Rules of the Game" for the AI
     system_prompt = (
         "You are an expert Senior Automation Engineer. "
-        "Convert the user's English instructions into professional IEC 61131-3 Structured Text (ST). "
-        "Strict Rules: "
-        "1. Start with a VAR...END_VAR block defining all inputs, outputs, and timers. "
-        "2. Use clear, descriptive variable names (e.g., Motor_Start, Temp_Sensor). "
-        "3. Every output MUST be disabled if 'E_STOP' (Emergency Stop) is TRUE. "
-        "4. Add comments using (* comment *) for each section. "
-        "5. Provide ONLY the code. Do not include introductory text or explanations."
+        "Convert instructions into professional IEC 61131-3 Structured Text (ST). "
+        "STRICT SYNTAX RULES: "
+        "1. Every 'IF' MUST have a corresponding 'END_IF;'. "  # Added semicolon requirement
+        "2. Every 'CASE' MUST have an 'END_CASE;'. "
+        "3. Every line of logic must end with a semicolon (;). "
+        "4. Ensure the code is complete and not truncated. " # Prevents the AI from stopping early
+        "5. Include a VAR...END_VAR block and E_STOP safety logic."
     )
 
     try:
