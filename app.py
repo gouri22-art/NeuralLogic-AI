@@ -1,53 +1,59 @@
 import streamlit as st
-import brain  # This imports the brain.py file we made earlier
-import validator # This will be our safety filter
+import brain
+import validator
 
-# Streamlit automatically looks in secrets.toml (local) or Cloud Secrets (online)
-api_key = st.secrets["GROQ_API_KEY"]
+st.set_page_config(page_title="NeuralLogic Pro", page_icon="⚡", layout="wide")
 
-st.set_page_config(page_title="NeuralLogic AI", page_icon="🤖")
+st.title("⚡ NeuralLogic AI: Industrial PLC IDE")
 
-st.title("🤖 NeuralLogic AI")
-st.subheader("Convert Natural Language to Industrial PLC Code")
-
-# Sidebar for instructions
+# --- SIDEBAR CONFIGURATION ---
 with st.sidebar:
-    st.info("Example: 'Start motor A when sensor B is high, wait 5 seconds, then stop.'")
-    st.warning("All code includes a mandatory Safety E-Stop.")
+    st.header("Settings")
+    plc_brand = st.selectbox("Select Target PLC Hardware", 
+                             ["Siemens TIA Portal", "Beckhoff TwinCAT", "Rockwell Studio 5000", "CODESYS Standard"])
+    st.divider()
+    st.info("💡 Tip: Always include 'E_STOP' in your description for safety validation.")
 
-# User Input
-user_query = st.text_area("Describe your machine logic:", placeholder="Type instructions here...")
+# --- MAIN INTERFACE ---
+user_query = st.text_area("Describe your machine logic:", 
+                          placeholder="e.g., Start motor A when sensor B is high, stop after 10 seconds...",
+                          height=150)
 
-if st.button("Generate PLC Code"):
+col1, col2 = st.columns([2, 1])
+
+if st.button("🚀 Generate & Validate Logic"):
     if user_query:
-        with st.spinner("Engineering..."):
-            raw_output = brain.generate_plc_code(user_query)
-            
-            # 1. Extract and Fix
+        with st.spinner(f"Engineering {plc_brand} code..."):
+            # 1. Processing
+            raw_output = brain.generate_plc_code(user_query, plc_brand)
             clean_code = validator.extract_code_only(raw_output)
             fixed_code = validator.fix_st_code(clean_code)
             
-            # 2. Validate
+            # 2. Validation
             errors = validator.validate_st_code(fixed_code)
-            
-            # 3. UI logic
-            if not errors:
-                st.success("✅ Code Generated!")
-            else:
-                with st.expander("⚠️ View Syntax Warnings"):
+            tags = validator.extract_tags(fixed_code)
+
+            with col1:
+                st.subheader(f"Generated Code ({plc_brand})")
+                st.code(fixed_code, language='iecst')
+                
+                st.download_button(
+                    label="💾 Download .ST File",
+                    data=fixed_code,
+                    file_name="logic.st",
+                    mime="text/plain"
+                )
+
+            with col2:
+                st.subheader("Safety & Status")
+                if not errors:
+                    st.success("✅ Code is Safety Compliant")
+                else:
                     for err in errors:
-                        st.write(err)
-
-            # --- DISPLAY THE CODE ---
-            st.code(fixed_code, language='iecst')
-
-            # --- PLACE DOWNLOAD BUTTON HERE ---
-            # It must be inside this 'if' block so 'fixed_code' is defined!
-            st.download_button(
-                label="Download .ST File",
-                data=fixed_code,
-                file_name="plc_logic.st",
-                mime="text/plain"
-            )
+                        st.warning(err)
+                
+                if tags:
+                    st.subheader("📋 IO Tag List")
+                    st.table({"Variable": [t[0] for t in tags], "Type": [t[1] for t in tags]})
     else:
-        st.error("Please enter a description first.")
+        st.error("Please enter instructions first.")
