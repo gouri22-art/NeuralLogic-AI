@@ -3,7 +3,7 @@ import brain  # This imports the brain.py file we made earlier
 import validator # This will be our safety filter
 
 # Streamlit automatically looks in secrets.toml (local) or Cloud Secrets (online)
-api_key = st.secrets["OPENAI_API_KEY"]
+api_key = st.secrets["GROQ_API_KEY"]
 
 st.set_page_config(page_title="NeuralLogic AI", page_icon="🤖")
 
