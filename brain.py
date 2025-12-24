@@ -10,56 +10,56 @@ import tempfile
 load_dotenv()
 
 def get_groq_client():
-    """Handles API key retrieval from Streamlit Secrets or Local .env"""
     api_key = st.secrets.get("GROQ_API_KEY") or os.getenv("GROQ_API_KEY")
     if not api_key:
-        st.error("Missing Groq API Key! Please check your secrets.toml or .env file.")
+        st.error("Missing Groq API Key!")
         st.stop()
     return Groq(api_key=api_key)
 
 def generate_plc_code(user_instruction, brand):
-    """Generates the actual Structured Text code."""
     client = get_groq_client()
-    
+    # Forces structure like: VAR -> Variables -> END_VAR -> IF E_STOP = FALSE
     system_prompt = (
-        f"You are a Senior Automation Engineer specializing in {brand}. "
-        "Convert instructions into professional IEC 61131-3 Structured Text. "
-        "1. Every 'IF' MUST have a corresponding 'END_IF;'. "
-        "2. Include a VAR...END_VAR block with descriptive tags. "
-        "3. Ensure an E_STOP safety interlock is present. "
-        "4. Provide ONLY the code block. No conversational chatter."
+        f"You are a Senior PLC Developer for {brand}. "
+        "Task: Generate ONLY Structured Text. No conversational text. No 'Approved by'. "
+        "Required Format:\n"
+        "VAR\n"
+        "  Sensor_B : BOOL;\n"
+        "  Motor_Start : BOOL;\n"
+        "  E_STOP : BOOL;\n"
+        "END_VAR\n\n"
+        "IF E_STOP = FALSE THEN\n"
+        "  IF [Logic] THEN\n"
+        "    [Action];\n"
+        "  ELSE\n"
+        "    [Action];\n"
+        "  END_IF;\n"
+        "END_IF;"
     )
-
     try:
         completion = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"Hardware: {brand}. Logic: {user_instruction}"}
-            ],
+            messages=[{"role": "system", "content": system_prompt},
+                      {"role": "user", "content": f"Logic Request: {user_instruction}"}],
             temperature=0.1
         )
         return completion.choices[0].message.content
     except Exception as e:
-        return f"Error Generating Code: {str(e)}"
+        return f"Error: {str(e)}"
 
 def generate_documentation(generated_code, brand):
-    """Generates the Maintenance Manual based on the generated code."""
     client = get_groq_client()
-    
     doc_prompt = f"""
-    You are a Technical Writer for Industrial Automation. 
-    Below is PLC code for {brand}. Write a professional 'Functional Description'.
+    Act as a Technical Writer. Create a professional Technical Manual for this {brand} PLC code.
+    DO NOT include 'Approved by', 'Date', or 'Engineer Name' fields.
     
-    Include:
-    1. **Operational Overview**: What does this logic do?
-    2. **Sequence of Operations**: Step-by-step signal flow.
-    3. **Troubleshooting**: 3 common reasons why this might fault.
-    
-    CODE:
-    {generated_code}
+    Required Sections:
+    1. System Overview
+    2. Functional Description
+    3. Safety and Interlocks
+    4. IO Mapping
+    5. Troubleshooting
     """
-
     try:
         completion = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
@@ -68,22 +68,21 @@ def generate_documentation(generated_code, brand):
         )
         return completion.choices[0].message.content
     except Exception as e:
-        return f"Error Generating Documentation: {str(e)}"
+        return f"Error: {str(e)}"
 
 def convert_to_pdf(markdown_text):
-    pdf = MarkdownPdf(toc_level=2)
+    # FIXED: toc_level=0 prevents link errors in PyMuPDF
+    pdf = MarkdownPdf(toc_level=0) 
     pdf.add_section(Section(markdown_text))
     pdf_buffer = BytesIO()
     pdf.save_bytes(pdf_buffer)
     return pdf_buffer.getvalue()
 
 def convert_to_word(markdown_text):
-    # Word conversion requires a temporary file because md2docx writes to disk
     with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as tmp_word:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".md", mode='w', encoding='utf-8') as tmp_md:
             tmp_md.write(markdown_text)
             tmp_md_path = tmp_md.name
-        
         markdown_to_word(tmp_md_path, tmp_word.name)
         with open(tmp_word.name, "rb") as f:
             word_data = f.read()
