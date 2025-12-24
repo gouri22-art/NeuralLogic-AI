@@ -1,4 +1,4 @@
-import re
+import re     # Regular expressions module is imported for pattern matching
 
 def extract_code_only(text):
     pattern = r"(VAR|PROGRAM)[\s\S]+?(END_IF;|END_VAR;|END_VAR|;)(?!\s*[\w])"
