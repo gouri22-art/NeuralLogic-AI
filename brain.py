@@ -1,5 +1,6 @@
 import os
 import streamlit as st
+import time
 from groq import Groq
 from dotenv import load_dotenv
 from markdown_pdf import MarkdownPdf, Section
@@ -18,23 +19,14 @@ def get_groq_client():
 
 def generate_plc_code(user_instruction, brand):
     client = get_groq_client()
-    # Forces structure like: VAR -> Variables -> END_VAR -> IF E_STOP = FALSE
     system_prompt = (
-        f"You are a Senior PLC Developer for {brand}. "
-        "Task: Generate ONLY Structured Text. No conversational text. No 'Approved by'. "
-        "Required Format:\n"
-        "VAR\n"
-        "  Sensor_B : BOOL;\n"
-        "  Motor_Start : BOOL;\n"
-        "  E_STOP : BOOL;\n"
-        "END_VAR\n\n"
-        "IF E_STOP = FALSE THEN\n"
-        "  IF [Logic] THEN\n"
-        "    [Action];\n"
-        "  ELSE\n"
-        "    [Action];\n"
-        "  END_IF;\n"
-        "END_IF;"
+        f"You are an Industrial PLC Expert for {brand}. "
+        "Generate ONLY Structured Text code. No administrative footers. "
+        "Requirements:\n"
+        "1. Identify specific devices from user prompt.\n"
+        "2. Use 'VAR...END_VAR' for all declarations.\n"
+        "3. Always wrap logic in an 'IF E_STOP = FALSE' safety block.\n"
+        "4. Use Blink/Cycle logic if 'every X seconds' is mentioned."
     )
     try:
         completion = client.chat.completions.create(
@@ -50,15 +42,13 @@ def generate_plc_code(user_instruction, brand):
 def generate_documentation(generated_code, brand):
     client = get_groq_client()
     doc_prompt = f"""
-    Act as a Technical Writer. Create a professional Technical Manual for this {brand} PLC code.
-    DO NOT include 'Approved by', 'Date', or 'Engineer Name' fields.
-    
-    Required Sections:
+    Act as a Technical Writer. Create a professional Technical Manual for: {generated_code}.
+    Headers Required:
     1. System Overview
     2. Functional Description
-    3. Safety and Interlocks
-    4. IO Mapping
-    5. Troubleshooting
+    3. Safety & Interlocks
+    4. I/O Mapping
+    5. Troubleshooting & Maintenance
     """
     try:
         completion = client.chat.completions.create(
@@ -70,9 +60,22 @@ def generate_documentation(generated_code, brand):
     except Exception as e:
         return f"Error: {str(e)}"
 
+def simulate_logic(input_state, estop_state, start_time, has_timer):
+    output_state = False
+    elapsed_in_cycle = 0
+    if not estop_state and input_state:
+        if has_timer:
+            total_elapsed = time.time() - start_time
+            cycle_time = 10.0 # 5s ON + 5s OFF
+            elapsed_in_cycle = total_elapsed % cycle_time
+            # Output is ON (True) during the first 5 seconds
+            output_state = True if elapsed_in_cycle < 5.0 else False
+        else:
+            output_state = True
+    return output_state, elapsed_in_cycle
+
 def convert_to_pdf(markdown_text):
-    # FIXED: toc_level=0 prevents link errors in PyMuPDF
-    pdf = MarkdownPdf(toc_level=0) 
+    pdf = MarkdownPdf(toc_level=0)
     pdf.add_section(Section(markdown_text))
     pdf_buffer = BytesIO()
     pdf.save_bytes(pdf_buffer)
