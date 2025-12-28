@@ -2,119 +2,149 @@ import streamlit as st
 import brain
 import validator
 import time
+import requests
+from streamlit_lottie import st_lottie
 
-st.set_page_config(page_title="NeuralLogic Pro", page_icon="⚡", layout="wide")
+# --- PROFESSIONAL CONFIGURATION ---
+st.set_page_config(page_title="NeuralLogic Pro AI", page_icon="⚡", layout="wide")
 
+# SAFE LOTTIE LOADING FUNCTION
+@st.cache_data(ttl=3600)
+def load_lottieurl(url: str):
+    try:
+        r = requests.get(url, timeout=5)
+        if r.status_code != 200:
+            return None
+        return r.json()
+    except:
+        return None
+
+# Load Assets
+lottie_motor = load_lottieurl("https://lottie.host/75f3e971-87a3-4a7b-84e9-11494548489c/nN6Y6YpS5m.json")
+lottie_sidebar = load_lottieurl("https://lottie.host/809c3132-7208-412f-98c4-c812d8a43f87/D1U190k6jS.json")
+
+# --- INDUSTRIAL MIDNIGHT UI STYLING ---
 st.markdown("""
     <style>
-    .stTabs [data-baseweb="tab"] { background-color: #f0f2f6; border-radius: 4px; padding: 8px 16px; font-weight: bold; }
-    .stTabs [aria-selected="true"] { border-top: 4px solid #ff4b4b; background-color: #ffffff; }
+    .main { background-color: #f8fafc; color: #1e293b; font-family: 'Segoe UI', sans-serif; }
+    [data-testid="stSidebar"] { background-color: #0f172a; color: #f8fafc; border-right: 2px solid #1e293b; }
+    .tip-box { background-color: rgba(245, 158, 11, 0.15); border-left: 5px solid #f59e0b; padding: 15px; border-radius: 4px; color: #fbbf24; font-size: 0.9rem; margin-top: 25px; }
+    .stButton>button { background-color: #334155; color: white; border-radius: 4px; border: 1px solid #475569; font-weight: 600; width: 100%; }
+    .stTabs [data-baseweb="tab-list"] { background-color: #e2e8f0; border-radius: 8px; padding: 5px; gap: 5px; }
+    .sim-status { padding: 20px; border-radius: 10px; text-align: center; color: white; font-weight: bold; font-size: 1.2rem; }
     </style>
     """, unsafe_allow_html=True)
 
-st.title("⚡ NeuralLogic AI: Industrial PLC IDE")
-
-# Initialize Session State keys if not present
-if "stored_project" not in st.session_state:
-    st.session_state.stored_project = None
-if "input_text" not in st.session_state:
-    st.session_state.input_text = ""
-
 with st.sidebar:
-    st.header("Settings")
-    plc_brand = st.selectbox(
-        "Select Target Hardware", 
-        ["Siemens TIA Portal", "Beckhoff TwinCAT", "Rockwell Studio 5000", "CODESYS Standard"],
-        key="plc_selector_sidebar"
-    )
-    st.divider()
-    
-    # RESET PROJECT: Now clears prompt and results
-    if st.button("♻️ Reset Project", key="reset_project_btn"):
-        st.session_state.stored_project = None
-        st.session_state.input_text = "" 
-        if 'sim_timer_ref' in st.session_state: del st.session_state.sim_timer_ref
-        st.rerun()
-        
-    st.divider()
-    st.info("💡 Tip: Always include 'E_STOP' in your description for safety validation.")
-
-# Linked to session state to allow clearing
-user_query = st.text_area(
-    "Describe your machine logic (e.g. based on Motor_A/Sensor_B):", 
-    value=st.session_state.input_text,
-    placeholder="e.g., Start Motor_A when Sensor_B is high, with a 5s timer...",
-    height=150,
-    key="main_user_input"
-)
-
-if st.button("🚀 Generate Industrial Project", key="generate_btn"):
-    if user_query:
-        st.session_state.input_text = user_query # Store current text
-        with st.spinner("Engineering System..."):
-            raw = brain.generate_plc_code(user_query, plc_brand)
-            code = validator.fix_st_code(validator.extract_code_only(raw))
-            manual = brain.generate_documentation(code, plc_brand)
-            st.session_state.stored_project = {"code": code, "manual": manual}
+    # --- LOGO ANIMATION (LEFT CORNER) ---
+    if lottie_sidebar:
+        st_lottie(lottie_sidebar, height=120, key="sidebar_logo")
     else:
-        st.error("Please enter a logic prompt.")
+        st.markdown("# ⚡ NeuralLogic")
+    
+    st.markdown("## ⚙️ Settings")
+    st.divider()
+    plc_brand = st.selectbox("Select Target Hardware", ["Siemens TIA Portal", "Beckhoff TwinCAT", "Rockwell Studio 5000", "CODESYS"])
+    if st.button("♻️ Reset Project"):
+        st.session_state.clear()
+        st.rerun()
+    st.markdown('<div class="tip-box"><strong>💡 Pro Tip:</strong> Always include <code>E_STOP</code> in your logic description to pass industrial safety validation.</div>', unsafe_allow_html=True)
 
-if st.session_state.stored_project:
+st.title("⚡ NeuralLogic AI: Industrial PLC IDE")
+user_query = st.text_area("Describe machine logic:", height=150, placeholder="Example: When System_Start is pressed and E_STOP is clear, start the Conveyor_Motor...")
+
+if st.button("🚀 Generate Industrial Project"):
+    if user_query:
+        with st.spinner("⚡ Synthesizing Engineering Logic..."):
+            full_raw = brain.generate_plc_code(user_query, plc_brand)
+            try:
+                st_part = full_raw.split("---LADDER_START---")[0] if "---LADDER_START---" in full_raw else full_raw
+                lad_part = full_raw.split("---LADDER_START---")[1].split("---XML_START---")[0] if "---LADDER_START---" in full_raw else ""
+                xml_part = full_raw.split("---XML_START---")[1] if "---XML_START---" in full_raw else ""
+                
+                code = validator.fix_st_code(validator.extract_code_only(st_part))
+                manual = brain.generate_documentation(code, plc_brand)
+                st.session_state.stored_project = {"code": code, "lad": lad_part, "xml": xml_part, "man": manual}
+            except Exception as e:
+                st.error(f"Generation Fault: {str(e)}")
+
+if st.session_state.get("stored_project"):
     res = st.session_state.stored_project
     tags = validator.extract_tags(res["code"])
-    has_timer = any(x in res["code"].upper() for x in ["TON", "TP", "T#", "TIMER"])
-    
-    label = next((tag[0] for tag in tags if any(kw in tag[0] for kw in ["Motor", "Belt", "Valve", "Conveyor", "Lamp"])), "Output")
+    col_main, col_diag = st.columns([2, 1])
 
-    col1, col2 = st.columns([2, 1])
-    with col1:
-        tab_code, tab_man, tab_sim = st.tabs(["💻 PLC Project Code", "📖 Technical Manual", "⚡ Live Simulator"])
+    with col_main:
+        tabs = st.tabs(["💻 PLC Project Code", "🧗 Ladder Logic", "📖 Technical Manual", "🕹️ Digital Twin Dashboard"])
         
-        with tab_code:
-            st.code(res["code"], language='iecst')
-            st.download_button("💾 Download .ST Source", res["code"], "logic.st", key="dl_st_btn")
-
-        with tab_man:
-            st.markdown(res["manual"])
+        with tabs[0]:
+            st.code(res["code"], language="iecst")
+            st.download_button("💾 Download .st", data=res["code"], file_name="logic.st", use_container_width=True)
+        
+        with tabs[1]:
+            st.code(res["lad"], language="text")
             st.divider()
-            st.subheader("📂 Professional Exports")
+            hw_xml = brain.generate_xml_extension(res["code"], tags)
+            st.download_button("🔌 Download Hardware XML", data=hw_xml, file_name="PLC_Import.xml", mime="application/xml", use_container_width=True)
+        
+        with tabs[2]:
+            st.markdown(res["man"])
+            st.divider()
+            st.write("### 📤 Export Manual")
             c1, c2, c3 = st.columns(3)
-            with c1: st.download_button("📥 Markdown", res["manual"], "manual.md", key="dl_md_btn")
-            with c2: st.download_button("📕 PDF", brain.convert_to_pdf(res["manual"]), "manual.pdf", "application/pdf", key="dl_pdf_btn")
-            with c3: st.download_button("📘 Word", brain.convert_to_word(res["manual"]), "manual.docx", key="dl_word_btn")
+            with c1: st.download_button("📕 PDF", data=brain.convert_to_pdf(res["man"]), file_name="Manual.pdf", use_container_width=True)
+            with c2: st.download_button("📘 Word", data=brain.convert_to_word(res["man"]), file_name="Manual.docx", use_container_width=True)
+            with c3: st.download_button("📄 Markdown", data=res["man"], file_name="Manual.md", use_container_width=True)
 
-        with tab_sim:
-            st.subheader(f"Continuous Simulation: {label}")
-            s1, s2 = st.columns(2)
-            with s1:
-                sim_in = st.toggle("Enable Input Signal", key="sim_input_toggle")
-                sim_estop = st.toggle("🚨 E_STOP (Safety)", key="sim_estop_toggle")
-                if sim_in and not sim_estop and has_timer:
-                    if 'sim_timer_ref' not in st.session_state: st.session_state.sim_timer_ref = time.time()
+        with tabs[3]:
+            st.subheader("🕹️ Digital Twin Dashboard")
+            
+            # --- INPUT CONTROLS ---
+            c_sys1, c_sys2, c_sys3 = st.columns([1, 1, 2])
+            master_start = c_sys1.toggle("🟩 MASTER START", key="master_toggle")
+            estop = c_sys2.toggle("🚨 E-STOP", value=True, key="estop_toggle")
+            
+            current_inputs = {}
+            col_viz, col_io = st.columns([2, 1])
+
+            with col_io:
+                st.write("**📥 Live Field I/O Signals**")
+                for tag, dtype in tags:
+                    if "E_STOP" not in tag.upper():
+                        current_inputs[tag] = st.checkbox(f"Signal: {tag}", key=f"cb_{tag}")
+
+            # CALCULATE LOGIC
+            sim_state, _ = brain.simulate_logic(current_inputs, estop, master_start, time.time(), False)
+
+            with c_sys3:
+                st.markdown(f"""
+                <div class="sim-status" style="background:{sim_state['color']}; border: 2px solid rgba(0,0,0,0.1);">
+                    <h3 style="margin:0; color:white; font-family:monospace;">{sim_state['message']}</h3>
+                </div>
+                """, unsafe_allow_html=True)
+
+            with col_viz:
+                st.write("**📊 Real-Time Telemetry**")
+                m1, m2, m3 = st.columns(3)
+                m1.metric("Motor Speed", f"{sim_state['speed']} RPM")
+                m2.metric("Motor Load", f"{sim_state['load']}%")
+                m3.metric("System Health", f"{sim_state['health']}%")
+                
+                # Visual Feedback: Animation vs Interlock
+                if estop:
+                    st.image("https://cdn-icons-png.flaticon.com/512/564/564619.png", width=150)
+                    st.error("Interlock: E-Stop Active")
+                elif sim_state['active'] and lottie_motor:
+                    st_lottie(lottie_motor, height=250, key="motor_anim")
                 else:
-                    if 'sim_timer_ref' in st.session_state: del st.session_state.sim_timer_ref
+                    st.image("https://cdn-icons-png.flaticon.com/512/3043/3043813.png", width=150)
+                    st.caption("System Standby - Awaiting Signals")
 
-            with s2:
-                t_start = st.session_state.get('sim_timer_ref', time.time())
-                is_on, elapsed = brain.simulate_logic(sim_in, sim_estop, t_start, has_timer)
-                
-                if has_timer:
-                    # Logic to show 0-5s for RUNNING and 5-10s for WAITING
-                    display_time = elapsed if elapsed < 5.0 else elapsed - 5.0
-                    phase = "RUNNING" if elapsed < 5.0 else "WAITING"
-                    st.write(f"Cycle Phase: **{phase}** ({display_time:.1f}s / 5.0s)")
-                    st.progress(display_time / 5.0)
-                    if sim_in and not sim_estop:
-                        time.sleep(0.1)
-                        st.rerun()
-                
-                # Fixed: RUNNING phase is now Green (Success)
-                if is_on: st.success(f"🟢 {label}: ON")
-                else: st.error(f"🔴 {label}: OFF")
-
-    with col2:
+    with col_diag:
         st.subheader("🛡️ Safety & Status")
-        st.success("✅ Brand Safety Validated")
-        if tags:
-            st.subheader("📋 I/O Tag Mapping")
-            st.table({"Variable": [t[0] for t in tags], "Type": [t[1] for t in tags]})
+        if any(x in res["code"].upper() for x in ["E_STOP", "ESTOP"]):
+            st.success("✅ E-STOP Safety Logic Detected")
+        else:
+            st.error("🚨 Safety Warning: No 'E_STOP' detected.")
+        
+        st.subheader("📋 I/O Tag Mapping")
+        st.table([{"Tag Name": t[0], "Data Type": t[1]} for t in tags])
