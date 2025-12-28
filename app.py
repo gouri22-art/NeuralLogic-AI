@@ -31,12 +31,28 @@ st.markdown("""
     .tip-box { background-color: rgba(245, 158, 11, 0.15); border-left: 5px solid #f59e0b; padding: 15px; border-radius: 4px; color: #fbbf24; font-size: 0.9rem; margin-top: 25px; }
     .stButton>button { background-color: #334155; color: white; border-radius: 4px; border: 1px solid #475569; font-weight: 600; width: 100%; }
     .stTabs [data-baseweb="tab-list"] { background-color: #e2e8f0; border-radius: 8px; padding: 5px; gap: 5px; }
-    .sim-status { padding: 20px; border-radius: 10px; text-align: center; color: white; font-weight: bold; font-size: 1.2rem; }
+    
+    /* NEW INDUSTRIAL STATUS BAR STYLE */
+    .scada-status-bar {
+        padding: 12px;
+        border-radius: 6px;
+        text-align: center;
+        color: white;
+        font-weight: 800;
+        font-family: 'Courier New', monospace;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        box-shadow: inset 0 0 10px rgba(0,0,0,0.2);
+        margin-bottom: 20px;
+    }
     </style>
     """, unsafe_allow_html=True)
 
+# Initialize Session States
+if "sim_speed" not in st.session_state:
+    st.session_state.sim_speed = 0
+
 with st.sidebar:
-    # --- LOGO ANIMATION (LEFT CORNER) ---
     if lottie_sidebar:
         st_lottie(lottie_sidebar, height=120, key="sidebar_logo")
     else:
@@ -51,7 +67,7 @@ with st.sidebar:
     st.markdown('<div class="tip-box"><strong>💡 Pro Tip:</strong> Always include <code>E_STOP</code> in your logic description to pass industrial safety validation.</div>', unsafe_allow_html=True)
 
 st.title("⚡ NeuralLogic AI: Industrial PLC IDE")
-user_query = st.text_area("Describe machine logic:", height=150, placeholder="Example: When System_Start is pressed and E_STOP is clear, start the Conveyor_Motor...")
+user_query = st.text_area("Describe machine logic:", height=150, placeholder="Example: Start motor when Sensor is high...")
 
 if st.button("🚀 Generate Industrial Project"):
     if user_query:
@@ -60,11 +76,10 @@ if st.button("🚀 Generate Industrial Project"):
             try:
                 st_part = full_raw.split("---LADDER_START---")[0] if "---LADDER_START---" in full_raw else full_raw
                 lad_part = full_raw.split("---LADDER_START---")[1].split("---XML_START---")[0] if "---LADDER_START---" in full_raw else ""
-                xml_part = full_raw.split("---XML_START---")[1] if "---XML_START---" in full_raw else ""
                 
                 code = validator.fix_st_code(validator.extract_code_only(st_part))
                 manual = brain.generate_documentation(code, plc_brand)
-                st.session_state.stored_project = {"code": code, "lad": lad_part, "xml": xml_part, "man": manual}
+                st.session_state.stored_project = {"code": code, "lad": lad_part, "man": manual}
             except Exception as e:
                 st.error(f"Generation Fault: {str(e)}")
 
@@ -89,20 +104,22 @@ if st.session_state.get("stored_project"):
         with tabs[2]:
             st.markdown(res["man"])
             st.divider()
-            st.write("### 📤 Export Manual")
             c1, c2, c3 = st.columns(3)
             with c1: st.download_button("📕 PDF", data=brain.convert_to_pdf(res["man"]), file_name="Manual.pdf", use_container_width=True)
             with c2: st.download_button("📘 Word", data=brain.convert_to_word(res["man"]), file_name="Manual.docx", use_container_width=True)
             with c3: st.download_button("📄 Markdown", data=res["man"], file_name="Manual.md", use_container_width=True)
 
         with tabs[3]:
+            # --- DASHBOARD TOP ROW ---
             st.subheader("🕹️ Digital Twin Dashboard")
             
-            # --- INPUT CONTROLS ---
-            c_sys1, c_sys2, c_sys3 = st.columns([1, 1, 2])
+            c_sys1, c_sys2 = st.columns([1, 1])
             master_start = c_sys1.toggle("🟩 MASTER START", key="master_toggle")
             estop = c_sys2.toggle("🚨 E-STOP", value=True, key="estop_toggle")
             
+            st.divider()
+
+            # --- DYNAMIC TELEMETRY CALCULATIONS ---
             current_inputs = {}
             col_viz, col_io = st.columns([2, 1])
 
@@ -112,17 +129,18 @@ if st.session_state.get("stored_project"):
                     if "E_STOP" not in tag.upper():
                         current_inputs[tag] = st.checkbox(f"Signal: {tag}", key=f"cb_{tag}")
 
-            # CALCULATE LOGIC
-            sim_state, _ = brain.simulate_logic(current_inputs, estop, master_start, time.time(), False)
+            # CALCULATE LOGIC WITH RAMP-UP
+            sim_state, new_speed = brain.simulate_logic(current_inputs, estop, master_start, st.session_state.sim_speed)
+            st.session_state.sim_speed = new_speed
 
-            with c_sys3:
+            with col_viz:
+                # NEW SCADA STATUS BAR (Replaced the big box)
                 st.markdown(f"""
-                <div class="sim-status" style="background:{sim_state['color']}; border: 2px solid rgba(0,0,0,0.1);">
-                    <h3 style="margin:0; color:white; font-family:monospace;">{sim_state['message']}</h3>
+                <div class="scada-status-bar" style="background:{sim_state['color']};">
+                    {sim_state['message']}
                 </div>
                 """, unsafe_allow_html=True)
 
-            with col_viz:
                 st.write("**📊 Real-Time Telemetry**")
                 m1, m2, m3 = st.columns(3)
                 m1.metric("Motor Speed", f"{sim_state['speed']} RPM")
@@ -131,13 +149,13 @@ if st.session_state.get("stored_project"):
                 
                 # Visual Feedback: Animation vs Interlock
                 if estop:
-                    st.image("https://cdn-icons-png.flaticon.com/512/564/564619.png", width=150)
+                    st.image("https://cdn-icons-png.flaticon.com/512/564/564619.png", width=120)
                     st.error("Interlock: E-Stop Active")
                 elif sim_state['active'] and lottie_motor:
                     st_lottie(lottie_motor, height=250, key="motor_anim")
                 else:
-                    st.image("https://cdn-icons-png.flaticon.com/512/3043/3043813.png", width=150)
-                    st.caption("System Standby - Awaiting Signals")
+                    st.image("https://cdn-icons-png.flaticon.com/512/3043/3043813.png", width=120)
+                    st.caption("System Standby")
 
     with col_diag:
         st.subheader("🛡️ Safety & Status")
