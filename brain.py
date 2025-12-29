@@ -73,7 +73,7 @@ def simulate_logic(inputs, estop, master_start, current_speed=0):
         "color": "#94a3b8" 
     }
 
-    # 1. SAFETY & INTERLOCKS (Hard Stops)
+    # 1. SAFETY & INTERLOCKS
     if estop:
         state.update({"speed": 0, "message": "🚨 EMERGENCY STOP ACTIVE", "color": "#ef4444"})
         return state, 0
@@ -117,7 +117,6 @@ def simulate_logic(inputs, estop, master_start, current_speed=0):
 
 def convert_to_pdf(text):
     """Safely converts Markdown to PDF. Sanitizes headers to prevent id-mapping errors."""
-    # Strip complex markers that cause 'No destination with id' crashes
     sanitized_text = re.sub(r'\{#.*?\}', '', text)
     
     buf = BytesIO()
@@ -126,7 +125,6 @@ def convert_to_pdf(text):
         pdf.add_section(Section(sanitized_text))
         pdf.save_bytes(buf)
     except Exception:
-        # Emergency Fallback: Remove all Markdown headers (#) to force a flat document
         try:
             fallback_text = sanitized_text.replace("# ", "**").replace("#", "")
             pdf_fb = MarkdownPdf(toc_level=0)
@@ -141,7 +139,7 @@ def convert_to_pdf(text):
 def convert_to_word(text):
     """Converts Markdown text to a .docx file using temporary storage."""
     with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as tw, \
-         tempfile.NamedTemporaryFile(delete=False, suffix=".md", mode='w', encoding='utf-8') as tm:
+          tempfile.NamedTemporaryFile(delete=False, suffix=".md", mode='w', encoding='utf-8') as tm:
         tm.write(text)
         tm_path = tm.name
         tw_path = tw.name
@@ -151,7 +149,6 @@ def convert_to_word(text):
         with open(tw_path, "rb") as f:
             data = f.read()
     finally:
-        # Ensure temp files are deleted even if conversion fails
         if os.path.exists(tm_path): os.remove(tm_path)
         if os.path.exists(tw_path): os.remove(tw_path)
         
