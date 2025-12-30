@@ -7,7 +7,7 @@ import re
 from streamlit_lottie import st_lottie
 
 # --- PROFESSIONAL CONFIGURATION ---
-st.set_page_config(page_title="NeuralLogic Pro AI", page_icon="⚡", layout="wide")
+st.set_page_config(page_title="PLCify Pro AI", page_icon="⚡", layout="wide")
 
 # SAFE LOTTIE LOADING FUNCTION
 @st.cache_data(ttl=3600)
@@ -27,6 +27,21 @@ st.markdown("""
     <style>
     .main { background-color: #f8fafc; color: #1e293b; font-family: 'Segoe UI', sans-serif; }
     
+    /* RAILS AND RUNGS VISUALIZER CONTAINER */
+    .ladder-container {
+        font-family: 'Courier New', Courier, monospace !important;
+        background-color: #0f172a;
+        color: #38bdf8;
+        padding: 25px;
+        border-radius: 8px;
+        line-height: 1.1;
+        white-space: pre !important;
+        overflow-x: auto;
+        border: 2px solid #1e293b;
+        font-size: 14px;
+        margin-bottom: 20px;
+    }
+
     /* SIDEBAR STYLING */
     [data-testid="stSidebar"] { 
         background-color: #0f172a !important; 
@@ -102,36 +117,29 @@ with st.sidebar:
     st.markdown('<div class="tip-box"><strong>💡 Pro Tip:</strong> Always include <code>E_STOP</code> for safety validation.</div>', unsafe_allow_html=True)
 
 # --- MAIN INTERFACE ---
-st.title("⚡ NeuralLogic AI: Industrial PLC IDE")
+st.title("⚡ PLCIFY: Industrial PLC IDE")
 user_query = st.text_area("Describe machine logic:", value=st.session_state.input_text, height=150, placeholder="Example: Start motor when Sensor is high...")
 
 if st.button("🚀 Generate Industrial Project", use_container_width=True):
-    # 1. EMPTY PROMPT VALIDATION
     if not user_query.strip():
-        st.error("⚠️ Logic Description Required. Please describe the machine operation before generating.")
+        st.error("⚠️ Logic Description Required.")
     else:
-        # 2. INSTANT CONTENT RESET (REFRESH VIEW)
         st.session_state.stored_project = None
-        
-        # 3. ADD TO HISTORY
         if user_query not in st.session_state.history:
             st.session_state.history.insert(0, user_query)
             st.session_state.history = st.session_state.history[:5]
         
-        # 4. START GENERATION
         with st.spinner("⚡ Synthesizing Engineering Logic..."):
-            full_raw = brain.generate_plc_code(user_query, plc_brand)
             try:
-                # Optimized Splitting
+                full_raw = brain.generate_plc_code(user_query, plc_brand)
                 st_part = full_raw.split("---LADDER_START---")[0] if "---LADDER_START---" in full_raw else full_raw
                 lad_part = full_raw.split("---LADDER_START---")[1].split("---XML_START---")[0] if "---LADDER_START---" in full_raw else ""
                 
                 code = validator.fix_st_code(validator.extract_code_only(st_part))
                 manual = brain.generate_documentation(code, plc_brand)
                 
-                # STORE NEW PROJECT
                 st.session_state.stored_project = {"code": code, "lad": lad_part, "man": manual}
-                st.rerun() # Refresh to show new results immediately
+                st.rerun()
             except Exception as e:
                 st.error(f"Generation Fault: {str(e)}")
 
@@ -149,10 +157,20 @@ if st.session_state.get("stored_project"):
             st.download_button("💾 Download .st", data=res["code"], file_name="logic.st", key="dl_st", use_container_width=True)
         
         with tabs[1]:
-            st.code(res["lad"], language="text")
+            st.write(f"### 🧗 {plc_brand} Visual Rails and Rungs")
+            # Forcing monospace alignment for the Rail and Rung style
+            st.markdown(f'<div class="ladder-container">{res["lad"]}</div>', unsafe_allow_html=True)
             st.divider()
-            hw_xml = brain.generate_xml_extension(res["code"], tags)
-            st.download_button("🔌 Download Hardware XML", data=hw_xml, file_name="PLC_Import.xml", mime="application/xml", use_container_width=True)
+            
+            hw_data, extension, mime_type = brain.generate_hardware_export(res["code"], tags, plc_brand)
+            st.download_button(
+                label=f"🔌 Download Hardware Project ({extension})",
+                data=hw_data,
+                file_name=f"NeuralLogic_Export{extension}",
+                mime=mime_type,
+                use_container_width=True,
+                help=f"Download native {plc_brand} import file."
+            )
         
         with tabs[2]:
             st.markdown(res["man"])
@@ -184,7 +202,7 @@ if st.session_state.get("stored_project"):
             with col_viz:
                 st.markdown(f'<div class="scada-status-bar" style="background:{sim_state["color"]};">{sim_state["message"]}</div>', unsafe_allow_html=True)
                 m1, m2, m3 = st.columns(3)
-                m1.metric("Motor Speed", f"{sim_state['speed']} RPM")
+                m1.metric("Motor Speed", f"{int(sim_state['speed'])} RPM")
                 m2.metric("Motor Load", f"{sim_state['load']}%")
                 m3.metric("System Health", f"{sim_state['health']}%")
                 
